@@ -1,0 +1,52 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: auth-api
+    url: http://auth:8005/auth
+    routes:
+      - name: auth-api-route
+        paths: ["/api/auth"]
+        strip_path: true
+
+  - name: case-api
+    url: http://case:8001/cases
+    routes:
+      - name: case-api-route
+        paths: ["/api/cases"]
+        strip_path: true
+    plugins:
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "x-user-id:demo-user"
+              - "x-user-role:approver"
+
+  - name: ai-api
+    url: http://ai:8002
+    routes:
+      - name: ai-api-route
+        paths: ["/api/ai"]
+        strip_path: true
+
+  - name: knowledge-api
+    url: http://knowledge:8003
+    routes:
+      - name: knowledge-api-route
+        paths: ["/api/knowledge"]
+        strip_path: true
+
+  - name: automation-api
+    url: http://automation:8004
+    routes:
+      - name: automation-api-route
+        paths: ["/api/automation"]
+        strip_path: true
+
+  - name: web-app
+    url: http://web:3000
+    routes:
+      - name: web-app-route
+        paths: ["/"]
+        strip_path: false
