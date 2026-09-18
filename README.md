@@ -25,6 +25,12 @@ flowchart LR
     automation -. whitelisted dry-run by default .-> targets[Target containers]
 ```
 
+## AI service architecture
+
+The current implementation and target architecture for AI orchestration, RAG,
+provider adapters, structured diagnoses, safety, and delivery phases are
+documented in [`services/ai/README.md`](services/ai/README.md).
+
 ## Project structure
 
 ```text
