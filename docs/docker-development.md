@@ -5,7 +5,7 @@ Docker Compose is the canonical runtime for reTedAI. Host-based commands are opt
 ## Prerequisites
 
 - Docker Desktop or Docker Engine with Compose v2.
-- Ports `3000`, `5432`, `5672`, `8001`–`8006`, `8080`, and `15672` available.
+- Ports `3000`, `5432`, `5672`, `6379`, `8001`–`8006`, `8080`, and `15672` available.
 - At least 4 GB of memory available to Docker for the complete local stack.
 
 ## First startup
@@ -28,11 +28,11 @@ Compose automatically starts declared dependencies:
 | Command | Starts |
 | --- | --- |
 | `docker compose up --build auth` | Auth, PostgreSQL |
-| `docker compose up --build case` | Case, PostgreSQL, RabbitMQ |
-| `docker compose up --build knowledge` | Knowledge, PostgreSQL |
-| `docker compose up --build ai` | AI, knowledge, PostgreSQL |
+| `docker compose up --build case` | Case, PostgreSQL, RabbitMQ, Redis |
+| `docker compose up --build knowledge` | Knowledge, PostgreSQL, Redis |
+| `docker compose up --build ai` | AI, knowledge, PostgreSQL, Redis |
 | `docker compose up --build automation` | Automation, PostgreSQL |
-| `docker compose up --build web` | Web, case, knowledge, PostgreSQL, RabbitMQ |
+| `docker compose up --build web` | Web, case, knowledge, PostgreSQL, RabbitMQ, Redis |
 | `docker compose up --build kong` | Complete public application stack |
 
 To prove that a service's starter image boots without dependencies, run its image directly:
@@ -43,6 +43,18 @@ docker run --rm -p 8001:8001 retedai-case
 ```
 
 Use `retedai-ai:8002`, `retedai-knowledge:8003`, `retedai-automation:8004`, or `retedai-auth:8005` for the other services. The AI service falls back locally when no model key or knowledge service is available. Auth starts with development token issuance disabled unless `AUTH_MODE=development`. Case, auth, and knowledge use in-memory repositories until PostgreSQL persistence is implemented. Automation returns audited dry runs unless explicitly enabled.
+
+## Redis cache
+
+Redis (`redis:7-alpine`) listens on `6379` with a 256 MB limit, `allkeys-lru` eviction, and no persistence. Case, knowledge, and AI use logical databases `0`, `1`, and `2` through `REDIS_URL`; a service never reads another service's keys. Redis is a dependency with `condition: service_started`, so it never blocks the gateway. An unset `REDIS_URL` disables caching when the cache helpers are implemented.
+
+```bash
+docker compose exec redis redis-cli ping
+docker compose exec redis redis-cli -n 1 keys 'emb:*'
+docker compose exec redis redis-cli flushall
+```
+
+`flushall` only clears cached data, which is rebuilt on demand. The service-side cache code is not implemented yet, so the key listing is empty until it lands.
 
 ## Container-level tests
 
@@ -57,7 +69,7 @@ docker compose run --rm --no-deps knowledge python -m pytest -q
 docker compose run --rm --no-deps automation python -m pytest -q
 ```
 
-`--no-deps` proves each unit-test suite is isolated from live PostgreSQL, RabbitMQ, and external model providers.
+`--no-deps` proves each unit-test suite is isolated from live PostgreSQL, RabbitMQ, Redis, and external model providers.
 
 ## Logs and troubleshooting
 
@@ -75,6 +87,7 @@ Common issues:
 - **A service remains unhealthy:** inspect `docker compose logs <service>` and run its `/health` endpoint from inside the container.
 - **Kong returns 404:** validate `gateway/kong.yml` and confirm the request uses the documented `/api/...` prefix.
 - **Docker Hub credential helper hangs on public images:** confirm Docker Desktop is fully started, sign in again, or fix the local Docker credential-store configuration. Do not commit machine-specific Docker configuration.
+- **Cache looks stale:** run `docker compose exec redis redis-cli flushall`; the cache is safe to clear at any time.
 - **No cases after restart:** the starter case and knowledge repositories are in memory. Run `python db/seed/load_seed.py` after service recreation.
 - **Provider requests fail:** leave model keys empty to use the deterministic AI fallback, or verify the relevant key/model variables in `.env`.
 - **Automation does not execute:** this is expected. `ENABLE_AUTOMATION_EXECUTION=false` is the safe default, and the base starter image does not expose the Docker socket.
